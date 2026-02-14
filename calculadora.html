@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Calculadora de Aposentadoria Antecipada</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+	<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+	<style>
+		body {
+			background: #181a1b;
+			color: #f5f6fa;
+			font-family: 'Inter', sans-serif;
+			margin: 0;
+			min-height: 100vh;
+		}
+		.container {
+			max-width: 420px;
+			margin: 40px auto;
+			background: #232526;
+			border-radius: 12px;
+			box-shadow: 0 2px 16px #0003;
+			padding: 32px 24px;
+		}
+		h1 {
+			font-size: 1.5rem;
+			margin-bottom: 24px;
+			text-align: center;
+			font-weight: 700;
+		}
+		label {
+			display: block;
+			margin-bottom: 8px;
+			font-weight: 700;
+		}
+		input {
+			width: 100%;
+			padding: 8px;
+			margin-bottom: 18px;
+			border: none;
+			border-radius: 6px;
+			background: #2c2f31;
+			color: #f5f6fa;
+			font-size: 1rem;
+		}
+		input:focus {
+			outline: 2px solid #4ecca3;
+		}
+		button {
+			width: 100%;
+			padding: 12px;
+			background: #4ecca3;
+			color: #181a1b;
+			border: none;
+			border-radius: 6px;
+			font-size: 1rem;
+			font-weight: 700;
+			cursor: pointer;
+			margin-bottom: 18px;
+			transition: background 0.2s;
+		}
+		button:hover {
+			background: #3bb08f;
+		}
+		.result {
+			text-align: center;
+			margin-bottom: 24px;
+			font-size: 1.1rem;
+		}
+		.chart-area {
+			background: #232526;
+			border-radius: 12px;
+			padding: 16px;
+		}
+		.compare {
+			margin-top: 24px;
+			text-align: center;
+		}
+		.compare input {
+			width: 80px;
+			display: inline-block;
+			margin: 0 8px;
+		}
+	</style>
+</head>
+<body>
+	<div class="container">
+		<h1>Calculadora de Aposentadoria</h1>
+		<form id="calcForm">
+			<label for="idade">Idade</label>
+			<input type="number" id="idade" min="18" max="99" required>
+			<label for="salario">Salário mensal (R$)</label>
+			<input type="number" id="salario" min="0" required>
+			<label for="gastos">Gastos mensais (R$)</label>
+			<input type="number" id="gastos" min="0" required>
+			<label for="investimento">Investimento mensal (R$)</label>
+			<input type="number" id="investimento" min="0" required>
+			<button type="submit">Calcular</button>
+		</form>
+		<div class="result" id="result"></div>
+		<div class="chart-area">
+			<canvas id="patrimonioChart" height="220"></canvas>
+		</div>
+		<div class="compare">
+			<span>Comparar cenários:</span><br>
+			<input type="number" id="investimento2" placeholder="Investimento 2">
+			<input type="number" id="gastos2" placeholder="Gastos 2">
+			<button id="compareBtn">Comparar</button>
+		</div>
+	</div>
+	<script>
+		// Parâmetros financeiros
+		const taxaRendimento = 0.07; // 7% ao ano
+		const taxaInflacao = 0.04; // 4% ao ano
+		const taxaRetirada = 0.04; // 4% de retirada segura
+
+		const form = document.getElementById('calcForm');
+		const resultDiv = document.getElementById('result');
+		const ctx = document.getElementById('patrimonioChart').getContext('2d');
+		const compareBtn = document.getElementById('compareBtn');
+
+		let chart;
+
+		function calcularAposentadoria(idade, salario, gastos, investimento, investimento2=null, gastos2=null) {
+			// Parâmetros
+			let patrimonio = 0;
+			let patrimonio2 = investimento2 !== null ? 0 : null;
+			let anos = 0;
+			let anos2 = investimento2 !== null ? 0 : null;
+			let historico = [];
+			let historico2 = [];
+			let idadeAtual = idade;
+			let idadeAtual2 = idade;
+			// Meta: patrimônio suficiente para cobrir gastos com retirada segura
+			let meta = gastos * 12 / taxaRetirada;
+			let meta2 = gastos2 !== null ? gastos2 * 12 / taxaRetirada : null;
+			// Simulação principal
+			while (patrimonio < meta && anos < 80) {
+				patrimonio += investimento;
+				patrimonio *= (1 + taxaRendimento - taxaInflacao);
+				historico.push({ ano: anos, idade: idadeAtual, patrimonio });
+				anos++;
+				idadeAtual++;
+			}
+			// Simulação cenário 2
+			if (investimento2 !== null && gastos2 !== null) {
+				while (patrimonio2 < meta2 && anos2 < 80) {
+					patrimonio2 += investimento2;
+					patrimonio2 *= (1 + taxaRendimento - taxaInflacao);
+					historico2.push({ ano: anos2, idade: idadeAtual2, patrimonio: patrimonio2 });
+					anos2++;
+					idadeAtual2++;
+				}
+			}
+			return {
+				anos,
+				idadeAposentadoria: idade + anos,
+				patrimonioFinal: patrimonio,
+				historico,
+				anos2,
+				idadeAposentadoria2: idade + anos2,
+				patrimonioFinal2: patrimonio2,
+				historico2
+			};
+		}
+
+		function renderChart(historico, historico2=null) {
+			const labels = historico.map(h => h.idade);
+			const data = historico.map(h => h.patrimonio);
+			let datasets = [
+				{
+					label: 'Patrimônio (cenário 1)',
+					data,
+					borderColor: '#4ecca3',
+					backgroundColor: 'rgba(78,204,163,0.1)',
+					tension: 0.2,
+				}
+			];
+			if (historico2) {
+				datasets.push({
+					label: 'Patrimônio (cenário 2)',
+					data: historico2.map(h => h.patrimonio),
+					borderColor: '#f5f6fa',
+					backgroundColor: 'rgba(245,246,250,0.1)',
+					tension: 0.2,
+				});
+			}
+			if (chart) chart.destroy();
+			chart = new Chart(ctx, {
+				type: 'line',
+				data: {
+					labels,
+					datasets
+				},
+				options: {
+					plugins: {
+						legend: {
+							labels: {
+								color: '#f5f6fa',
+								font: { weight: 'bold' }
+							}
+						}
+					},
+					scales: {
+						x: {
+							ticks: { color: '#f5f6fa' },
+							grid: { color: '#232526' }
+						},
+						y: {
+							ticks: { color: '#f5f6fa' },
+							grid: { color: '#232526' }
+						}
+					}
+				}
+			});
+		}
+
+		function salvarDadosLocal(idade, salario, gastos, investimento) {
+			localStorage.setItem('calcAposentadoria', JSON.stringify({ idade, salario, gastos, investimento }));
+		}
+
+		function carregarDadosLocal() {
+			const dados = localStorage.getItem('calcAposentadoria');
+			if (dados) {
+				const { idade, salario, gastos, investimento } = JSON.parse(dados);
+				document.getElementById('idade').value = idade;
+				document.getElementById('salario').value = salario;
+				document.getElementById('gastos').value = gastos;
+				document.getElementById('investimento').value = investimento;
+			}
+		}
+
+		form.addEventListener('submit', function(e) {
+			e.preventDefault();
+			const idade = parseInt(document.getElementById('idade').value);
+			const salario = parseFloat(document.getElementById('salario').value);
+			const gastos = parseFloat(document.getElementById('gastos').value);
+			const investimento = parseFloat(document.getElementById('investimento').value);
+			salvarDadosLocal(idade, salario, gastos, investimento);
+			const resultado = calcularAposentadoria(idade, salario, gastos, investimento);
+			resultDiv.innerHTML = `Você poderá se aposentar em <b>${resultado.anos}</b> anos (idade <b>${resultado.idadeAposentadoria}</b>)<br>Patrimônio final: <b>R$ ${resultado.patrimonioFinal.toLocaleString('pt-BR', {maximumFractionDigits:0})}</b>`;
+			renderChart(resultado.historico);
+		});
+
+		compareBtn.addEventListener('click', function() {
+			const idade = parseInt(document.getElementById('idade').value);
+			const salario = parseFloat(document.getElementById('salario').value);
+			const gastos = parseFloat(document.getElementById('gastos').value);
+			const investimento = parseFloat(document.getElementById('investimento').value);
+			const investimento2 = parseFloat(document.getElementById('investimento2').value);
+			const gastos2 = parseFloat(document.getElementById('gastos2').value);
+			if (isNaN(investimento2) || isNaN(gastos2)) {
+				alert('Preencha os campos de comparação.');
+				return;
+			}
+			const resultado = calcularAposentadoria(idade, salario, gastos, investimento, investimento2, gastos2);
+			resultDiv.innerHTML = `Cenário 1: aposentadoria em <b>${resultado.anos}</b> anos (idade <b>${resultado.idadeAposentadoria}</b>)<br>Patrimônio final: <b>R$ ${resultado.patrimonioFinal.toLocaleString('pt-BR', {maximumFractionDigits:0})}</b><br><br>Cenário 2: aposentadoria em <b>${resultado.anos2}</b> anos (idade <b>${resultado.idadeAposentadoria2}</b>)<br>Patrimônio final: <b>R$ ${resultado.patrimonioFinal2.toLocaleString('pt-BR', {maximumFractionDigits:0})}</b>`;
+			renderChart(resultado.historico, resultado.historico2);
+		});
+
+		window.onload = carregarDadosLocal;
+	</script>
+	</script>
+</body>
+</html>
